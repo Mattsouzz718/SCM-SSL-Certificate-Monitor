@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="logo.png" alt="Logo do Equiplex SSL Guard" width="380">
+<img src="logo.png" alt="Logo do SSL Guard" width="380">
 
-# Equiplex SSL Guard
+# SCM (SSL Certificate Monitor)
 
 **Aplicativo desktop para acompanhar a validade de certificados HTTPS no Windows 11.**
 
