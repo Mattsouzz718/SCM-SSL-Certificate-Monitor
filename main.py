@@ -1,3 +1,4 @@
+import logging
 import queue
 import threading
 import time
@@ -6,8 +7,8 @@ from pathlib import Path
 
 import customtkinter as ctk
 
-from modulos.notificacoes import enviar_notificacao_windows
-from modulos.persistencia import carregar_dados, salvar_dados
+from modulos.notificacoes import enviar_notificacao
+from modulos.persistencia import ARQUIVO_LOG, PASTA_DADOS, carregar_dados, salvar_dados
 from modulos.ssl_checker import normalizar_dominio, verificar_dominio
 
 
@@ -15,6 +16,19 @@ from modulos.ssl_checker import normalizar_dominio, verificar_dominio
 INTERVALO_MONITORAMENTO = 15 * 60  # segundos
 DIAS_ALERTA_VENCIMENTO = 7
 PASTA_PROJETO = Path(__file__).resolve().parent
+
+try:
+    PASTA_DADOS.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(
+        filename=str(ARQUIVO_LOG),
+        level=logging.INFO,
+        encoding="utf-8",
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+except OSError:
+    logging.basicConfig(level=logging.INFO)
+
+LOGGER = logging.getLogger("equiplex_ssl_guard")
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -47,7 +61,7 @@ class App(ctk.CTk):
         self.tray_icon = None
         self.tray_disponivel = False
         self.encerrando = False
-        self.alertas_visuais = []
+        self.notificacoes_pendentes = set()
 
         self.protocol("WM_DELETE_WINDOW", self.ao_fechar_janela)
 
@@ -114,6 +128,20 @@ class App(ctk.CTk):
         self.after(250, self._iniciar_monitoramento)
         self.after(400, self._processar_fila_resultados)
 
+    def _salvar_sites(self, contexto="salvar dados"):
+        """Salva a lista sem encerrar o aplicativo se o sistema bloquear a gravação."""
+        try:
+            salvar_dados(self.sites)
+            return True
+        except OSError as erro:
+            LOGGER.exception("Falha ao %s", contexto)
+            if hasattr(self, "lbl_monitor"):
+                self.lbl_monitor.configure(
+                    text=f"Não foi possível salvar os dados ({erro}). Verifique as permissões da pasta do usuário.",
+                    text_color="#F59E0B",
+                )
+            return False
+
     def adicionar_site(self):
         dominio = normalizar_dominio(self.entry_dominio.get())
         if not dominio:
@@ -125,18 +153,19 @@ class App(ctk.CTk):
                 self.lbl_monitor.configure(text=f"{dominio} já está na lista de monitoramento.", text_color="#F59E0B")
                 return
             self.sites.append({"dominio": dominio, "ultimo_alerta": None})
-            salvar_dados(self.sites)
+            salvo = self._salvar_sites("adicionar domínio")
 
         self.entry_dominio.delete(0, "end")
         self.atualizar_dashboard()
-        self.lbl_monitor.configure(text=f"{dominio} adicionado. Consultando certificado e localização...", text_color="#A7B5CC")
+        if salvo:
+            self.lbl_monitor.configure(text=f"{dominio} adicionado. Consultando certificado e localização...", text_color="#A7B5CC")
         self.verificar_agora()
 
     def remover_site(self, site):
         with self.lock_sites:
             if site in self.sites:
                 self.sites.remove(site)
-                salvar_dados(self.sites)
+                self._salvar_sites("remover domínio")
         self.resultados.pop(site["dominio"], None)
         self.atualizar_dashboard()
 
@@ -157,7 +186,8 @@ class App(ctk.CTk):
         )
 
     def _rotina_monitoramento(self):
-        """Executa toda a rede fora da thread gráfica para não travar a interface."""
+        """Executa consultas de rede fora da thread gráfica."""
+        verificacao_inicial = True
         while not self.parar_monitoramento.is_set():
             with self.lock_sites:
                 dominios = [site["dominio"] for site in self.sites]
@@ -169,6 +199,7 @@ class App(ctk.CTk):
                     resultado = verificar_dominio(dominio)
                 except Exception as erro:
                     # Uma falha inesperada em um domínio não encerra o monitor.
+                    LOGGER.exception("Falha inesperada ao verificar %s", dominio)
                     resultado = {
                         "dominio": dominio,
                         "dias": -999,
@@ -178,10 +209,14 @@ class App(ctk.CTk):
                         "regiao": None,
                         "pais": None,
                         "provedor": None,
+                        "erro_localizacao": None,
                         "erro": f"Falha inesperada na consulta: {erro}",
                     }
-                self.fila_resultados.put((dominio, resultado))
+                # Na primeira varredura, alerta também sobre problemas já existentes
+                # nos domínios carregados do arquivo de dados.
+                self.fila_resultados.put((dominio, resultado, verificacao_inicial))
 
+            verificacao_inicial = False
             # Um clique em Verificar agora acorda o monitor antes dos 15 minutos.
             proxima_varredura = time.monotonic() + INTERVALO_MONITORAMENTO
             while not self.parar_monitoramento.is_set():
@@ -203,25 +238,31 @@ class App(ctk.CTk):
         alterou = False
         while True:
             try:
-                dominio, resultado = self.fila_resultados.get_nowait()
+                dominio, resultado, verificacao_inicial = self.fila_resultados.get_nowait()
             except queue.Empty:
                 break
 
             self.resultados[dominio] = resultado
             alterou = True
-            self._avaliar_alerta(dominio, resultado)
+            self._avaliar_alerta(dominio, resultado, forcar=verificacao_inicial)
 
         if alterou:
             self.atualizar_dashboard()
-            self.lbl_monitor.configure(
-                text=f"● Monitoramento ativo • Última atualização: {datetime.now().strftime('%H:%M:%S')} • Próxima varredura automática em até 15 min.",
-                text_color="#10B981",
-            )
+            if self.notificacoes_pendentes:
+                self.lbl_monitor.configure(
+                    text="Monitoramento ativo, mas há notificações pendentes. Confira as configurações de notificações do sistema.",
+                    text_color="#F59E0B",
+                )
+            else:
+                self.lbl_monitor.configure(
+                    text=f"● Monitoramento ativo • Última atualização: {datetime.now().strftime('%H:%M:%S')} • Próxima varredura automática em até 15 min.",
+                    text_color="#10B981",
+                )
 
         if not self.encerrando:
             self.after(400, self._processar_fila_resultados)
 
-    def _avaliar_alerta(self, dominio, resultado):
+    def _avaliar_alerta(self, dominio, resultado, forcar=False):
         dias = resultado.get("dias", -999)
         if dias == -999:
             return
@@ -241,12 +282,12 @@ class App(ctk.CTk):
             if etapa is None:
                 if etapa_anterior is not None:
                     site["ultimo_alerta"] = None
-                    salvar_dados(self.sites)
+                    self._salvar_sites(f"limpar alerta de {dominio}")
                 return
-            if etapa == etapa_anterior:
+            # A primeira verificação após abrir o programa reavalia todos os sites
+            # salvos, mesmo que o estágio já tenha sido registrado em uma sessão antiga.
+            if etapa == etapa_anterior and not forcar:
                 return
-            site["ultimo_alerta"] = etapa
-            salvar_dados(self.sites)
 
         expiracao = resultado.get("expiracao")
         data_texto = (
@@ -257,11 +298,31 @@ class App(ctk.CTk):
             titulo = "🔴 CERTIFICADO SSL EXPIRADO"
             mensagem = f"{dominio}: o certificado venceu em {data_texto}. Renove-o o quanto antes."
         else:
-            titulo = "⚠️ CERTIFICADO SSL PRÓXIMO DO VENCIMENTO"
             mensagem = f"{dominio}: restam {dias} dia(s). Vencimento: {data_texto}."
+            titulo = "⚠️ CERTIFICADO SSL PRÓXIMO DO VENCIMENTO"
 
-        # A aparência da notificação nativa é controlada pelo Windows.
-        enviar_notificacao_windows(titulo, mensagem)
+        enviado = enviar_notificacao(titulo, mensagem)
+        if enviado:
+            self.notificacoes_pendentes.discard(dominio)
+        else:
+            self.notificacoes_pendentes.add(dominio)
+        with self.lock_sites:
+            site = next((s for s in self.sites if s["dominio"] == dominio), None)
+            if site is None:
+                return
+            if enviado:
+                # O estado só é confirmado após a biblioteca aceitar a notificação.
+                site["ultimo_alerta"] = etapa
+                site["ultimo_alerta_em"] = datetime.now(timezone.utc).isoformat()
+                self._salvar_sites(f"registrar alerta enviado para {dominio}")
+            else:
+                # Mantém o alerta pendente para que uma varredura posterior tente de novo.
+                site["ultimo_alerta"] = None
+                self._salvar_sites(f"registrar alerta pendente para {dominio}")
+                self.lbl_monitor.configure(
+                    text=f"Não foi possível enviar a notificação de {dominio}; a tentativa será repetida.",
+                    text_color="#F59E0B",
+                )
 
     def atualizar_dashboard(self):
         for widget in self.frame_lista.winfo_children():
@@ -323,6 +384,8 @@ class App(ctk.CTk):
                 lugar = ", ".join(str(p) for p in (cidade, regiao, pais) if p) or "Localização indisponível"
                 provedor = resultado.get("provedor") or "Provedor desconhecido"
                 detalhes = f"IP: {ip}  •  Localização estimada: {lugar}  •  {provedor}"
+                if resultado.get("erro_localizacao") and lugar == "Localização indisponível":
+                    detalhes += "  •  Serviço de localização sem resposta; nova tentativa automática posterior"
                 expiracao = resultado.get("expiracao")
                 if expiracao:
                     detalhes += f"  •  Vence: {expiracao.strftime('%d/%m/%Y')} UTC"
@@ -410,7 +473,7 @@ class App(ctk.CTk):
     def ao_fechar_janela(self):
         if self.tray_disponivel:
             self.withdraw()
-            enviar_notificacao_windows(
+            enviar_notificacao(
                 "Equiplex SSL Guard continua ativo",
                 "O monitoramento continua na bandeja do sistema. Use o ícone perto do relógio para abrir ou encerrar o app.",
             )

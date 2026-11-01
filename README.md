@@ -30,26 +30,26 @@ Consulta o certificado, estima a localização do IP conectado e avisa quando um
 - **Verificação em segundo plano:** realiza uma varredura ao iniciar e repete a consulta automaticamente a cada **15 minutos**. As consultas de rede acontecem fora da thread gráfica para manter a janela responsiva.
 - **Ícones e estados no painel:** mostra se o certificado está dentro do prazo, próximo do vencimento, expirado ou se houve erro na consulta.
 - **Alertas de vencimento:** gera um alerta quando faltam **7 dias ou menos** para o vencimento e outro quando identifica um certificado expirado. O mesmo estágio de alerta não é repetido em todas as varreduras.
-- **Notificações no Windows:** envia notificações nativas do Windows 10/11 para certificados próximos do vencimento ou expirados. O aplicativo não abre pop-ups próprios; a aparência da notificação é controlada pelo Windows.
+- **Notificações do sistema:** no Windows, tenta enviar notificações nativas usando Winotify e utiliza Plyer como alternativa quando Winotify falha; Plyer também permite notificações em ambientes compatíveis com macOS e Linux. A exibição final depende das permissões e configurações do sistema operacional.
 - **Bandeja do sistema:** utiliza o ícone azul de escudo e cadeado em `icone_bandeja.png`. Fechar a janela normalmente esconde o aplicativo perto do relógio, mantendo a verificação ativa. O menu do ícone oferece opções para abrir o painel, verificar agora e encerrar o aplicativo.
-- **Dados persistentes:** guarda a lista de domínios e o estágio do último alerta em `dados.json`.
-- **Localização em cache:** guarda temporariamente os dados de geolocalização por IP para reduzir consultas repetidas ao serviço de localização.
+- **Dados persistentes por usuário:** guarda a lista de domínios e o estado dos alertas na pasta de dados do usuário, independente da pasta em que o projeto foi extraído. O `dados.json` antigo é importado automaticamente na primeira execução.
+- **Localização com alternativa:** consulta dois serviços públicos de geolocalização em sequência e mantém os resultados temporariamente em cache. Uma falha no primeiro serviço não impede a tentativa pelo segundo.
 - **Execução manual:** não há script `iniciar.bat` e o aplicativo não foi configurado para iniciar junto com o Windows. Ele começa somente quando você executa `main.py` pelo VS Code ou pelo Python.
 
 ## Requisitos
 
-- Windows 11 recomendado. O painel também usa bibliotecas multiplataforma, mas a notificação nativa é específica do Windows.
+- Windows 11 recomendado. A interface e as notificações usam bibliotecas multiplataforma, mas a disponibilidade e o comportamento exatos dependem do sistema operacional e de seus serviços de notificação.
 - Python **3.10 ou superior**.
 - Visual Studio Code.
 - Extensão **Python**, publicada pela Microsoft, instalada no VS Code.
-- Acesso à internet para consultar os sites HTTPS e o serviço de localização `ipapi.co`.
+- Acesso à internet para consultar os sites HTTPS e os serviços de localização `ipwho.is` e `ipapi.co`.
 
-As bibliotecas necessárias estão listadas em `requirements.txt`. A instalação inclui CustomTkinter, Requests, Cryptography, pystray, Pillow e Winotify (no Windows).
+As bibliotecas necessárias estão listadas em `requirements.txt`. A instalação inclui CustomTkinter, Requests, Cryptography, pystray, Pillow, Plyer e Winotify (no Windows).
 
 ## Instalação e execução pelo VS Code
 
 1. Extraia o arquivo ZIP para uma pasta.
-2. Abra o VS Code e selecione **Arquivo → Abrir Pasta...**. Escolha a pasta `Projeto-Equiplex-SSL-Guard-main`, aquela que contém `main.py` e `requirements.txt`.
+2. Abra o VS Code e selecione **Arquivo → Abrir Pasta...**. Escolha a pasta extraída que contém `main.py` e `requirements.txt` (o nome da pasta pode variar conforme o ZIP).
 3. Abra o terminal integrado pelo menu **Terminal → Novo Terminal**.
 4. Instale as dependências. No Windows, tente:
 
@@ -94,18 +94,18 @@ Se a bandeja do sistema não puder ser iniciada, o aplicativo informa o problema
 - **Mais de 30 dias restantes:** estado verde, prazo OK.
 - **De 8 a 30 dias restantes:** estado laranja, atenção.
 - **De 0 a 7 dias restantes:** estado vermelho e alerta de certificado próximo do vencimento.
-- **Certificado expirado:** o domínio fica sinalizado em vermelho no painel e o app envia uma notificação nativa do Windows.
+- **Certificado expirado:** o domínio fica sinalizado em vermelho no painel e o app envia uma notificação do sistema operacional, quando suportado e permitido.
 - **Erro de consulta:** o cartão indica erro de conexão ou de leitura. A falha de uma consulta não deve encerrar o monitoramento dos outros domínios.
 
-O estágio de alerta é registrado em `dados.json`. Assim, a mesma notificação não é disparada em cada varredura para um certificado que continua no mesmo estágio. Quando o certificado passa de próximo do vencimento para expirado, o app pode emitir o alerta de expiração.
+O estágio do alerta é registrado nos dados do usuário. Durante o funcionamento normal, a mesma notificação não é repetida a cada varredura se o certificado continua no mesmo estágio. **Ao iniciar o aplicativo, porém, os domínios já salvos são reavaliados e os certificados que continuam próximos do vencimento ou expirados geram um novo aviso.** Isso permite recuperar alertas de sites monitorados mesmo depois de o aplicativo ter sido totalmente encerrado. O estágio só é confirmado no arquivo depois que a biblioteca de notificação aceita o envio; se houver falha, a tentativa fica pendente para uma varredura posterior.
 
-O aplicativo não exibe mais aquele pop-up vermelho próprio. Ele envia somente notificações nativas do Windows. A aparência, a cor e o posicionamento dessas notificações são controlados pelo Windows e não podem ser definidos livremente pelo app.
+O aplicativo não exibe um pop-up próprio dentro da interface. Ele solicita notificações ao sistema operacional. No Windows, a aparência, a cor e o posicionamento são controlados pelo próprio Windows e não podem ser definidos livremente pelo app.
 
 Para receber as notificações, deixe-as habilitadas em **Configurações do Windows → Sistema → Notificações** e permita notificações para o ambiente de execução. O aplicativo precisa continuar em execução para detectar mudanças e enviar alertas.
 
 ## Localização do servidor
 
-O aplicativo consulta o IP que foi efetivamente usado na conexão HTTPS e envia esse IP ao serviço público `ipapi.co`. Quando o serviço responde, o painel pode exibir cidade, região, país e organização/provedor. A resposta de localização é armazenada em cache por até 24 horas.
+O aplicativo consulta o IP que foi efetivamente usado na conexão HTTPS e tenta obter os dados primeiro em `ipwho.is` e, se necessário, em `ipapi.co`. Quando um serviço responde, o painel pode exibir cidade, região, país e organização/provedor. A resposta válida é armazenada em cache por até 24 horas; falhas também são armazenadas por um período curto para evitar consultas excessivas.
 
 A localização é **uma estimativa baseada no IP**, não uma leitura de GPS nem uma medição da posição física exata do equipamento que hospeda o site. Sites com CDN, proxy, balanceamento de carga ou serviços como Cloudflare podem apresentar um IP de infraestrutura intermediária. Se o serviço de geolocalização estiver indisponível, o certificado ainda pode ser verificado, mas os campos de localização podem ficar vazios.
 
@@ -114,17 +114,17 @@ A localização é **uma estimativa baseada no IP**, não uma leitura de GPS nem
 ```text
 Projeto-Equiplex-SSL-Guard-main/
 ├── main.py                    # Interface, painel e rotina do monitor
-├── dados.json                 # Domínios salvos e estágios de alerta
+├── dados.json                 # Dados antigos; importados automaticamente se encontrados
 ├── requirements.txt            # Dependências Python
-├── logo.png                    # Logo principal do projeto
-├── icone_bandeja.png           # Ícone transparente da bandeja e das notificações
+├── logo.png                   # Logo principal do projeto
+├── icone_bandeja.png          # Ícone da bandeja e das notificações
 ├── README.md                   # Este guia
 ├── .vscode/
 │   └── launch.json             # Configuração para executar com F5
 └── modulos/
     ├── ssl_checker.py          # Consulta SSL, validade, IP e localização
-    ├── notificacoes.py         # Notificações nativas do Windows
-    └── persistencia.py         # Leitura e gravação de dados.json
+    ├── notificacoes.py        # Notificações do sistema operacional
+    └── persistencia.py       # Dados na pasta do usuário e migração do JSON antigo
 ```
 
 ## Limitações e observações de segurança
@@ -132,8 +132,8 @@ Projeto-Equiplex-SSL-Guard-main/
 - **Validade não é uma auditoria TLS completa.** Para ler a data de certificados já vencidos, a consulta extrai o certificado sem validar a cadeia de confiança TLS. Portanto, o estado exibido se refere principalmente à data de expiração e não garante que o certificado seja confiável, que o domínio corresponda ao certificado ou que toda a configuração HTTPS esteja segura.
 - **A disponibilidade não é garantida.** Uma falha de DNS, conexão, bloqueio de rede ou limitação de consultas pode impedir uma varredura. O app não prevê se um servidor realmente vai cair; ele monitora a data de validade do certificado.
 - **O IP pode variar.** Um domínio pode resolver para endereços diferentes conforme a rede, o DNS, o balanceamento de carga e a infraestrutura do site.
-- **Serviço externo de geolocalização.** Para mostrar a localização, o IP conectado é consultado no serviço `ipapi.co`. Sem internet, com limite de requisições ou com falha do serviço, a localização pode não aparecer.
-- **Notificações nativas.** O Windows pode ocultar ou agrupar notificações conforme suas próprias configurações. O aplicativo usa somente notificações nativas, sem exibir pop-ups próprios.
+- **Serviços externos de geolocalização.** Para mostrar a localização, o IP conectado é consultado em serviços públicos. Sem internet, com bloqueio de DNS/firewall, limitação de consultas ou falha dos dois serviços, a localização pode não aparecer; nesse caso, o painel exibe um aviso. A localização é aproximada e depende dos dados desses provedores.
+- **Notificações do sistema.** O sistema operacional pode ocultar ou agrupar notificações, e políticas de dispositivo podem bloqueá-las. A biblioteca conseguir enviar uma notificação não garante que o sistema a mostre visualmente; permita notificações para o aplicativo/ambiente Python nas configurações do sistema.
 
 ## Solução de problemas
 
@@ -153,11 +153,15 @@ Confira se o terminal está usando o mesmo interpretador selecionado no VS Code.
 
 ### A localização não aparece
 
-Verifique a conexão com a internet. A localização depende de uma resposta do `ipapi.co` e pode não estar disponível para todos os IPs.
+Verifique a conexão com a internet e se o firewall/antivírus permite conexões HTTPS para `ipwho.is` e `ipapi.co`. O app tenta os dois serviços, mas endereços de CDN, proxy e alguns IPs podem não ter localização detalhada. O arquivo `equiplex_ssl_guard.log`, na pasta de dados do usuário, pode ajudar a identificar falhas de consulta.
 
 ### A notificação não apareceu
 
-Confira **Configurações do Windows → Sistema → Notificações** e permita notificações para o ambiente de execução. Os alertas nativos são enviados quando a varredura detecta uma mudança de estágio; eles não são repetidos a cada 15 minutos sem necessidade.
+Confira **Configurações do Windows → Sistema → Notificações**, desative temporariamente o modo Não incomodar/Foco e permita notificações para o ambiente de execução. Ao abrir o aplicativo, os sites salvos em estado de alerta são verificados novamente. Se a biblioteca não conseguir enviar a notificação, o painel indica que há uma tentativa pendente e o app tenta novamente em uma varredura posterior. Consulte também `equiplex_ssl_guard.log` na pasta de dados do usuário.
+
+### Onde ficam os dados e o log
+
+No Windows, a lista de domínios e o log ficam em `%APPDATA%\EquiplexSSLGuard\dados.json` e `%APPDATA%\EquiplexSSLGuard\equiplex_ssl_guard.log`. Em outros sistemas, o app usa a pasta de dados do usuário conforme `XDG_DATA_HOME` ou `~/.local/share/EquiplexSSLGuard`. O projeto não precisa de permissão de gravação na pasta em que foi extraído.
 
 ### O monitor parou depois de fechar o VS Code
 
