@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="logo.png" alt="Logo do SSL Guard" width="380">
+<img src="logo.png" alt="Logo do SCM (SSL Certificate Monitor)" width="380">
 
 # SCM (SSL Certificate Monitor)
 
@@ -63,7 +63,7 @@ As bibliotecas necessárias estão listadas em `requirements.txt`. A instalaçã
    python -m pip install -r requirements.txt
    ```
 
-5. Abra `main.py` e clique em **Run Python File** no canto superior direito. Como alternativa, abra **Run and Debug**, escolha **Equiplex SSL Guard (main.py)** e pressione **F5**.
+5. Abra `main.py` e clique em **Run Python File** no canto superior direito. Como alternativa, abra **Run and Debug**, escolha **SCM (SSL Certificate Monitor) (main.py)** e pressione **F5**.
 
 A instalação das dependências precisa ser feita apenas uma vez para o ambiente Python selecionado. Depois disso, para iniciar o aplicativo basta executar `main.py`. **Não é necessário usar arquivo `.bat`.**
 
@@ -77,7 +77,7 @@ A instalação das dependências precisa ser feita apenas uma vez para o ambient
 4. Use **Verificar agora** para solicitar uma nova varredura sem esperar o próximo intervalo automático.
 5. Clique no botão `✕` de um cartão para remover aquele domínio da lista.
 6. Para fechar a janela sem parar o monitoramento, use o botão de fechar da janela. O aplicativo ficará na bandeja do sistema, perto do relógio do Windows.
-7. Para reabrir o painel, clique com o botão direito no ícone da bandeja e selecione **Abrir Equiplex SSL Guard**. Para finalizar completamente, escolha **Encerrar**.
+7. Para reabrir o painel, clique com o botão direito no ícone da bandeja e selecione **Abrir SCM (SSL Certificate Monitor)**. Para finalizar completamente, escolha **Encerrar**.
 
 ## Monitoramento em segundo plano
 
@@ -112,7 +112,7 @@ A localização é **uma estimativa baseada no IP**, não uma leitura de GPS nem
 ## Estrutura do projeto
 
 ```text
-Projeto-Equiplex-SSL-Guard-main/
+SCM (SSL Certificate Monitor)/
 ├── main.py                    # Interface, painel e rotina do monitor
 ├── dados.json                 # Dados antigos; importados automaticamente se encontrados
 ├── requirements.txt            # Dependências Python
@@ -153,15 +153,15 @@ Confira se o terminal está usando o mesmo interpretador selecionado no VS Code.
 
 ### A localização não aparece
 
-Verifique a conexão com a internet e se o firewall/antivírus permite conexões HTTPS para `ipwho.is` e `ipapi.co`. O app tenta os dois serviços, mas endereços de CDN, proxy e alguns IPs podem não ter localização detalhada. O arquivo `equiplex_ssl_guard.log`, na pasta de dados do usuário, pode ajudar a identificar falhas de consulta.
+Verifique a conexão com a internet e se o firewall/antivírus permite conexões HTTPS para `ipwho.is` e `ipapi.co`. O app tenta os dois serviços, mas endereços de CDN, proxy e alguns IPs podem não ter localização detalhada. O arquivo `scm.log`, na pasta de dados do usuário, pode ajudar a identificar falhas de consulta.
 
 ### A notificação não apareceu
 
-Confira **Configurações do Windows → Sistema → Notificações**, desative temporariamente o modo Não incomodar/Foco e permita notificações para o ambiente de execução. Ao abrir o aplicativo, os sites salvos em estado de alerta são verificados novamente. Se a biblioteca não conseguir enviar a notificação, o painel indica que há uma tentativa pendente e o app tenta novamente em uma varredura posterior. Consulte também `equiplex_ssl_guard.log` na pasta de dados do usuário.
+Confira **Configurações do Windows → Sistema → Notificações**, desative temporariamente o modo Não incomodar/Foco e permita notificações para o ambiente de execução. Ao abrir o aplicativo, os sites salvos em estado de alerta são verificados novamente. Se a biblioteca não conseguir enviar a notificação, o painel indica que há uma tentativa pendente e o app tenta novamente em uma varredura posterior. Consulte também `scm.log` na pasta de dados do usuário.
 
 ### Onde ficam os dados e o log
 
-No Windows, a lista de domínios e o log ficam em `%APPDATA%\EquiplexSSLGuard\dados.json` e `%APPDATA%\EquiplexSSLGuard\equiplex_ssl_guard.log`. Em outros sistemas, o app usa a pasta de dados do usuário conforme `XDG_DATA_HOME` ou `~/.local/share/EquiplexSSLGuard`. O projeto não precisa de permissão de gravação na pasta em que foi extraído.
+No Windows, a lista de domínios e o log ficam em `%APPDATA%\SCM (SSL Certificate Monitor)\dados.json` e `%APPDATA%\SCM (SSL Certificate Monitor)\scm.log`. Em outros sistemas, o app usa a pasta de dados do usuário conforme `XDG_DATA_HOME` ou `~/.local/share/SCM (SSL Certificate Monitor)`. O projeto não precisa de permissão de gravação na pasta em que foi extraído.
 
 ### O monitor parou depois de fechar o VS Code
 

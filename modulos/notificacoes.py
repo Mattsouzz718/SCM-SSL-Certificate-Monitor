@@ -23,7 +23,7 @@ def enviar_notificacao(titulo, mensagem):
             from winotify import Notification
 
             notificacao = Notification(
-                app_id="Equiplex SSL Guard",
+                app_id="SCM (SSL Certificate Monitor)",
                 title=str(titulo),
                 msg=str(mensagem),
                 icon=str(ICONE_NOTIFICACAO.resolve()) if ICONE_NOTIFICACAO.exists() else "",
@@ -41,7 +41,7 @@ def enviar_notificacao(titulo, mensagem):
         argumentos = {
             "title": str(titulo),
             "message": str(mensagem),
-            "app_name": "Equiplex SSL Guard",
+            "app_name": "SCM (SSL Certificate Monitor)",
             "timeout": 10,
         }
         if ICONE_NOTIFICACAO.exists():

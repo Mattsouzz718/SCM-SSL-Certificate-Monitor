@@ -100,7 +100,7 @@ def _localizar_ip(ip):
             resposta = requests.get(
                 url,
                 timeout=3.5,
-                headers={"User-Agent": "Equiplex-SSL-Guard/1.2"},
+                headers={"User-Agent": "SCM-SSL-Certificate-Monitor/1.0"},
             )
             resposta.raise_for_status()
             dados = _normalizar_resposta_geografica(resposta.json(), fonte)

@@ -8,7 +8,13 @@ from pathlib import Path
 import customtkinter as ctk
 
 from modulos.notificacoes import enviar_notificacao
-from modulos.persistencia import ARQUIVO_LOG, PASTA_DADOS, carregar_dados, salvar_dados
+from modulos.persistencia import (
+    ARQUIVO_LOG,
+    PASTA_DADOS,
+    carregar_dados,
+    migrar_log_antigo,
+    salvar_dados,
+)
 from modulos.ssl_checker import normalizar_dominio, verificar_dominio
 
 
@@ -16,6 +22,8 @@ from modulos.ssl_checker import normalizar_dominio, verificar_dominio
 INTERVALO_MONITORAMENTO = 15 * 60  # segundos
 DIAS_ALERTA_VENCIMENTO = 7
 PASTA_PROJETO = Path(__file__).resolve().parent
+
+migrar_log_antigo()
 
 try:
     PASTA_DADOS.mkdir(parents=True, exist_ok=True)
@@ -28,7 +36,7 @@ try:
 except OSError:
     logging.basicConfig(level=logging.INFO)
 
-LOGGER = logging.getLogger("equiplex_ssl_guard")
+LOGGER = logging.getLogger("scm")
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -37,7 +45,7 @@ ctk.set_default_color_theme("blue")
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Equiplex SSL Guard")
+        self.title("SCM (SSL Certificate Monitor)")
         self.geometry("900x640")
         self.minsize(760, 540)
         self.configure(fg_color="#121212")
@@ -71,7 +79,7 @@ class App(ctk.CTk):
 
         self.entry_dominio = ctk.CTkEntry(
             self.frame_top,
-            placeholder_text="Domínio ou URL (ex.: equiplex.com.br)",
+            placeholder_text="Domínio ou URL (ex.: exemplo.com.br)",
             height=42,
             font=("Segoe UI", 13),
             border_width=1,
@@ -176,7 +184,7 @@ class App(ctk.CTk):
             return
         self.thread_monitor = threading.Thread(
             target=self._rotina_monitoramento,
-            name="EquiplexSSLMonitor",
+            name="SCMMonitor",
             daemon=True,
         )
         self.thread_monitor.start()
@@ -434,12 +442,12 @@ class App(ctk.CTk):
             imagem = Image.open(caminho_icone).convert("RGBA")
             imagem.thumbnail((64, 64))
             menu = pystray.Menu(
-                pystray.MenuItem("Abrir Equiplex SSL Guard", self._acao_abrir_bandeja, default=True),
+                pystray.MenuItem("Abrir SCM (SSL Certificate Monitor)", self._acao_abrir_bandeja, default=True),
                 pystray.MenuItem("Verificar agora", self._acao_verificar_bandeja),
                 pystray.MenuItem("Encerrar", self._acao_encerrar_bandeja),
             )
             self.tray_icon = pystray.Icon(
-                "equiplex_ssl_guard", imagem, "Equiplex SSL Guard", menu
+                "scm_ssl_certificate_monitor", imagem, "SCM (SSL Certificate Monitor)", menu
             )
             self.tray_icon.run_detached()
             self.tray_disponivel = True
@@ -474,7 +482,7 @@ class App(ctk.CTk):
         if self.tray_disponivel:
             self.withdraw()
             enviar_notificacao(
-                "Equiplex SSL Guard continua ativo",
+                "SCM (SSL Certificate Monitor) continua ativo",
                 "O monitoramento continua na bandeja do sistema. Use o ícone perto do relógio para abrir ou encerrar o app.",
             )
         else:
